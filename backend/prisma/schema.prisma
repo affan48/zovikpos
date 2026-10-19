@@ -1,0 +1,376 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Branch {
+  id             Int                  @id @default(autoincrement())
+  name           String
+  address        String?
+  phone          String?
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  tables         Table[]
+  users          User[]
+  menuItems      MenuItem[]
+  inventoryItems InventoryItem[]
+  orders         Order[]
+  receivings     InventoryReceiving[]
+}
+
+model Table {
+  id          Int       @id @default(autoincrement())
+  branchId    Int?
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  tableNumber String    @unique
+  qrToken     String    @unique
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  sessions    Session[]
+  orders      Order[]
+}
+
+model User {
+  id            Int                  @id @default(autoincrement())
+  email         String               @unique
+  password      String
+  name          String
+  role          String               @default("CUSTOMER") // ADMIN, VENDOR, KITCHEN, CUSTOMER
+  isDemo        Boolean              @default(false)
+  isActive      Boolean              @default(true)
+  branchId      Int?
+  branch        Branch?              @relation(fields: [branchId], references: [id])
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  orders        Order[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  statusChanges OrderStatusHistory[]
+  inventoryLogs InventoryLog[]
+  receivings    InventoryReceiving[]
+}
+
+model Session {
+  id          String     @id // UUID
+  tableId     Int
+  table       Table      @relation(fields: [tableId], references: [id])
+  customerId  Int?
+  customer    User?      @relation(fields: [customerId], references: [id])
+  status      String     @default("ACTIVE") // ACTIVE, CHECKOUT, COMPLETED, EXPIRED, CANCELLED
+  startedAt   DateTime   @default(now())
+  expiresAt   DateTime
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  cart        Cart?
+  orders      Order[]
+  otps        EmailOTP[]
+}
+
+model Cart {
+  id        Int        @id @default(autoincrement())
+  sessionId String     @unique
+  session   Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+}
+
+model CartItem {
+  id         Int      @id @default(autoincrement())
+  cartId     Int
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItemId Int
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int      @default(1)
+  price      Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MenuItem {
+  id          Int         @id @default(autoincrement())
+  branchId    Int?
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+  name        String
+  description String?
+  price       Float
+  type        String?     @default("food") // food, drink, dessert, sides, other
+  category    String
+  unit        String?     @default("1 No.") // e.g. "250 gm", "500 gm", "1 No.", "1 Cup", "1 Box", "1 Plate"
+  groupName   String?     // Groups variants together, e.g. "Chicken Biryani / Pulao"
+  stock       Int         @default(0)
+  prepTime    Int         @default(5) // prep time in minutes
+  imageUrl    String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+  recipeItems RecipeItem[]
+}
+
+model Order {
+  id            Int                  @id @default(autoincrement())
+  orderNumber   String               @unique // e.g. ORD-2026-0001
+  sessionId     String?
+  session       Session?             @relation(fields: [sessionId], references: [id])
+  customerId    Int?
+  tableId       Int?
+  table         Table?               @relation(fields: [tableId], references: [id])
+  branchId      Int?
+  branch        Branch?              @relation(fields: [branchId], references: [id])
+  tableNumber   String? // Snapshot display (e.g. "Table 4")
+  customerEmail String?
+  emailVerified Boolean              @default(false)
+  trackingToken String?              @unique // Unique order tracking token for direct QR scan
+  status        String               @default("PENDING") // PENDING, PAYMENT_PENDING, PAID, PREPARING, READY, COMPLETED, CANCELLED, PAYMENT_FAILED, REFUNDED
+  subtotal      Float                @default(0.0)
+  tax           Float                @default(0.0)
+  discount      Float                @default(0.0)
+  total         Float
+  paymentStatus String               @default("UNPAID") // UNPAID, PENDING_VERIFICATION, PAID, FAILED, REFUNDED
+  paymentMethod String? // COD, Easypaisa, JazzCash
+  paymentTxId   String?              @unique
+  userId        Int
+  user          User                 @relation(fields: [userId], references: [id])
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  completedAt   DateTime?
+  orderItems    OrderItem[]
+  payment       Payment?
+  etaPrediction ETAPrediction?
+  statusHistory OrderStatusHistory[]
+}
+
+model OrderItem {
+  id            Int      @id @default(autoincrement())
+  orderId       Int
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId    Int
+  menuItem      MenuItem @relation(fields: [menuItemId], references: [id])
+  nameSnapshot  String // Preserves historical item name
+  priceSnapshot Float // Preserves historical item unit price
+  quantity      Int
+  subtotal      Float
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount    Float
+  method    String
+  txId      String?  @unique
+  status    String   @default("UNPAID")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ETAPrediction {
+  id              Int      @id @default(autoincrement())
+  orderId         Int?     @unique
+  order           Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  baseEta         Float
+  adjustedEta     Float
+  actualTime      Float?
+  queueLength     Int
+  kitchenLoad     String
+  peakHour        Boolean
+  historicalDelay Float
+  createdAt       DateTime @default(now())
+}
+
+model DemandForecast {
+  id           Int      @id @default(autoincrement())
+  menuItemName String   @unique
+  forecastDate DateTime
+  predictedQty Float
+  confidence   Float?
+  features     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Supplier {
+  id             Int                  @id @default(autoincrement())
+  name           String
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  inventoryItems InventoryItem[]
+  logs           InventoryLog[]
+  receivings     InventoryReceiving[]
+}
+
+model RecipeItem {
+  id              Int           @id @default(autoincrement())
+  menuItemId      Int
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Float
+  unit            String        @default("PCS")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([menuItemId, inventoryItemId])
+}
+
+model InventoryItem {
+  id             Int                      @id @default(autoincrement())
+  branchId       Int?
+  branch         Branch?                  @relation(fields: [branchId], references: [id])
+  name           String
+  category       String                   @default("Other")
+  sku            String?
+  stockLevel     Float                    @default(0.0)
+  unit           String
+  minThreshold   Float                    @default(10.0)
+  maxThreshold   Float                    @default(100.0)
+  costPrice      Float                    @default(0.0)
+  expiryDate     DateTime?
+  supplierId     Int?
+  supplier       Supplier?                @relation(fields: [supplierId], references: [id])
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  logs           InventoryLog[]
+  recipeItems    RecipeItem[]
+  receivingItems InventoryReceivingItem[]
+
+  @@unique([branchId, name])
+}
+
+model InventoryLog {
+  id              Int                 @id @default(autoincrement())
+  inventoryItemId Int
+  inventoryItem   InventoryItem       @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            String              // STOCK_IN, USAGE, WASTAGE, ADJUSTMENT, RESTORATION
+  quantity        Float               @default(0.0)
+  quantityBefore  Float               @default(0.0)
+  quantityAfter   Float               @default(0.0)
+  changeQty       Float               @default(0.0)
+  cost            Float?
+  reason          String?
+  orderId         Int?
+  orderItemId     Int?
+  receivingId     Int?
+  receiving       InventoryReceiving?     @relation(fields: [receivingId], references: [id])
+  receivingItemId Int?
+  receivingItem   InventoryReceivingItem? @relation(fields: [receivingItemId], references: [id])
+  unitCost        Float?
+  batchRemaining  Float?
+  batchNumber     String?
+  expiryDate      DateTime?
+  supplierId      Int?
+  supplier        Supplier?               @relation(fields: [supplierId], references: [id])
+  userId          Int?
+  user            User?                   @relation(fields: [userId], references: [id])
+  createdBy       Int?
+  createdAt       DateTime                @default(now())
+}
+
+model InventoryReceiving {
+  id              Int                      @id @default(autoincrement())
+  receivingNumber String                   @unique // e.g. REC-2026-0001
+  supplierId      Int?
+  supplier        Supplier?                @relation(fields: [supplierId], references: [id])
+  invoiceNumber   String?
+  branchId        Int?
+  branch          Branch?                  @relation(fields: [branchId], references: [id])
+  receivingDate   DateTime                 @default(now())
+  receivedById    Int?
+  receivedBy      User?                    @relation(fields: [receivedById], references: [id])
+  notes           String?
+  status          String                   @default("DRAFT") // DRAFT, RECEIVED, CANCELLED
+  subtotal        Float                    @default(0.0)
+  discount        Float                    @default(0.0)
+  discountPercent Float?
+  totalCost       Float                    @default(0.0)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  items           InventoryReceivingItem[]
+  logs            InventoryLog[]
+}
+
+model InventoryReceivingItem {
+  id                Int                @id @default(autoincrement())
+  receivingId       Int
+  receiving         InventoryReceiving @relation(fields: [receivingId], references: [id], onDelete: Cascade)
+  inventoryItemId   Int
+  inventoryItem     InventoryItem      @relation(fields: [inventoryItemId], references: [id])
+  quantity          Float
+  remainingQuantity Float?
+  unit              String
+  unitCost          Float              @default(0.0)
+  totalCost         Float              @default(0.0)
+  batchNumber       String?
+  expiryDate        DateTime?
+  notes             String?
+  createdAt         DateTime           @default(now())
+  deductionLogs     InventoryLog[]
+}
+
+model EmailOTP {
+  id         Int       @id @default(autoincrement())
+  email      String
+  sessionId  String?
+  session    Session?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  String?
+  newValue  String?
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
+model OrderStatusHistory {
+  id              Int      @id @default(autoincrement())
+  orderId         Int
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  previousStatus  String?
+  newStatus       String
+  changedByUserId Int?
+  changedByUser   User?    @relation(fields: [changedByUserId], references: [id])
+  note            String?
+  createdAt       DateTime @default(now())
+}
+
+model PaymentSetting {
+  id            Int      @id @default(autoincrement())
+  codEnabled    Boolean  @default(true)
+  onlineEnabled Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
