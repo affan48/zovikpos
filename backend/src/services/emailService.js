@@ -182,6 +182,7 @@ const buildItemsHtml = (orderItems = []) => {
  * 1. Send OTP Verification Email
  */
 const sendOTPEmail = async (email, name, otp) => {
+  console.log(`[Email Service] 🔑 Verification OTP generated for ${email}: [${otp}]`);
   const customerName = typeof name === 'string' && name !== 'Customer' && !name.startsWith('Table') ? name : 'Valued Guest';
   const safeCustomerName = escapeHtml(customerName);
   const subject = `Your Verification Code: ${otp} - ZovikPOS`;

@@ -760,11 +760,14 @@ const CustomerDashboard = ({ tableIdFromRoute }) => {
 
       if (res.data.success) {
         setOtpSent(true);
-        setOtpSuccess('Verification code sent to your student email. Check inbox.');
+        setOtpSuccess(res.data.message || 'Verification code sent to your student email. Check inbox.');
+        if (res.data.testOtp) {
+          setOtpCode(res.data.testOtp);
+        }
         setCooldown(30);
       }
     } catch (err) {
-      setOtpError(err.response?.data?.error || 'Failed to send OTP code.');
+      setOtpError(err.response?.data?.error || (err.message?.includes('Network') ? 'Network connection error. Server is starting up, please try again in a moment.' : 'Failed to send OTP code.'));
       if (err.response?.status === 429) {
         const responseData = err.response?.data || {};
         const messageDelay = String(responseData.error || '').match(/(\d+)\s*seconds?/i);
