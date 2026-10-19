@@ -1,22 +1,35 @@
 import axios from 'axios';
 
+const sanitizeUrl = (raw) => {
+  if (!raw || typeof raw !== 'string') return '';
+  // Extract pure http(s) URL in case accidental UI labels (e.g. "Copy URL \n") were pasted
+  const match = raw.match(/https?:\/\/[^\s"'`]+/i);
+  return match ? match[0] : raw.trim();
+};
+
 export const getBackendBase = () => {
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SOCKET_URL) {
-    return import.meta.env.VITE_SOCKET_URL.replace(/\/$/, '');
+  const socketEnv = sanitizeUrl(typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SOCKET_URL : null);
+  if (socketEnv) {
+    return socketEnv.replace(/\/$/, '');
   }
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '');
+  const apiEnv = sanitizeUrl(typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE_URL : null);
+  if (apiEnv) {
+    return apiEnv.replace(/\/api\/?$/, '');
   }
   if (typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
+    if (host.includes('zovikpos.store') || host.includes('vercel.app')) {
+      return 'https://zovikpos-production-92cf.up.railway.app';
+    }
     return `http://${host}:5001`;
   }
   return 'http://localhost:5001';
 };
 
 const getApiBase = () => {
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
+  const apiEnv = sanitizeUrl(typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE_URL : null);
+  if (apiEnv) {
+    return apiEnv.endsWith('/api') ? apiEnv : `${apiEnv.replace(/\/$/, '')}/api`;
   }
   return `${getBackendBase()}/api`;
 };

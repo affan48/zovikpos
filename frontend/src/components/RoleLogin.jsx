@@ -99,7 +99,12 @@ const RoleLogin = ({ roleType = 'CASHIER', onLoginSuccess }) => {
       }
     } catch (err) {
       console.error('Role Login error:', err);
-      setError(err.response?.data?.error || 'Invalid email or password. Please try again.');
+      setError(
+        err.response?.data?.error ||
+        (err.message?.includes('Network') || !err.response
+          ? 'Network connection error. Server is starting up, please try again in a moment.'
+          : 'Invalid email or password. Please try again.')
+      );
     } finally {
       setLoading(false);
     }
