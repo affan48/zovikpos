@@ -233,20 +233,20 @@ const sendOTP = async (req, res) => {
     });
   }
 
-  // Server-side enforcement: Check if student account is blocked
-  const existingUser = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: { id: true, role: true, isActive: true },
-  });
-  if (existingUser && existingUser.isActive === false) {
-    return res.status(403).json({
-      error: 'This student account has been restricted by administration. Ordering is blocked. Please contact admin.',
-    });
-  }
-
   const safeName = typeof name === 'string' ? name.trim().slice(0, 120) : 'Customer';
 
   try {
+    // Server-side enforcement: Check if student account is blocked
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, role: true, isActive: true },
+    });
+    if (existingUser && existingUser.isActive === false) {
+      return res.status(403).json({
+        error: 'This student account has been restricted by administration. Ordering is blocked. Please contact admin.',
+      });
+    }
+
     // Check for active unexpired OTP to enforce resend cooldown (30 seconds)
     const recentOTP = await prisma.emailOTP.findFirst({
       where: {
@@ -338,18 +338,18 @@ const verifyOTP = async (req, res) => {
     return res.status(400).json({ error: 'Please enter a valid UIT student email address (e.g., 23SP-051-SE@students.uitu.edu.pk).' });
   }
 
-  // Server-side enforcement: Check if student account is blocked
-  const preCheckUser = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: { id: true, role: true, isActive: true },
-  });
-  if (preCheckUser && preCheckUser.isActive === false) {
-    return res.status(403).json({ error: 'This student account has been restricted by administration. Ordering is blocked.' });
-  }
-
-  const inputHash = hashOTP(normalizedEmail, otp.trim());
-
   try {
+    // Server-side enforcement: Check if student account is blocked
+    const preCheckUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, role: true, isActive: true },
+    });
+    if (preCheckUser && preCheckUser.isActive === false) {
+      return res.status(403).json({ error: 'This student account has been restricted by administration. Ordering is blocked.' });
+    }
+
+    const inputHash = hashOTP(normalizedEmail, otp.trim());
+
     const otpRecord = await prisma.emailOTP.findFirst({
       where: {
         email: normalizedEmail,

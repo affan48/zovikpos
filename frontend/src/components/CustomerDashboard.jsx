@@ -439,9 +439,10 @@ const CustomerDashboard = ({ tableIdFromRoute }) => {
 
         // Normal flow or same table: start or refresh session with complete signed token
         try {
-          const res = await api.post('/sessions/start', {
-            qrToken: cleanRouteToken,
-          });
+          const payload = cleanRouteToken.startsWith('tbl:')
+            ? { qrToken: cleanRouteToken }
+            : { tableNumber: cleanRouteToken };
+          const res = await api.post('/sessions/start', payload);
 
           if (res.data.session) {
             const s = res.data.session;
@@ -616,9 +617,10 @@ const CustomerDashboard = ({ tableIdFromRoute }) => {
     }
 
     try {
-      const res = await api.post('/sessions/start', {
-        qrToken: pendingTableToken,
-      });
+      const payload = pendingTableToken.startsWith('tbl:')
+        ? { qrToken: pendingTableToken }
+        : { tableNumber: pendingTableToken };
+      const res = await api.post('/sessions/start', payload);
 
       if (res.data.session) {
         const s = res.data.session;

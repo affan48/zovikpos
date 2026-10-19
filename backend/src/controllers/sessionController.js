@@ -17,29 +17,50 @@ const startSession = async (req, res) => {
     let table = null;
 
     if (qrToken) {
-      const verification = verifyTableToken(qrToken);
-      if (!verification.valid) {
-        return res.status(400).json({ error: verification.error || 'Invalid table QR code.' });
-      }
+      if (qrToken.startsWith('tbl:')) {
+        const verification = verifyTableToken(qrToken);
+        if (!verification.valid) {
+          return res.status(400).json({ error: verification.error || 'Invalid table QR code.' });
+        }
 
-      const searchToken = verification.normalizedToken || qrToken;
-      table = await prisma.table.findFirst({
-        where: {
-          OR: [
-            { qrToken: searchToken },
-            { qrToken: qrToken },
-            { tableNumber: `Table ${verification.tableNumber}` },
-            { tableNumber: String(verification.tableNumber) },
-          ],
-        },
-        include: { branch: true },
-      });
+        const searchToken = verification.normalizedToken || qrToken;
+        table = await prisma.table.findFirst({
+          where: {
+            OR: [
+              { qrToken: searchToken },
+              { qrToken: qrToken },
+              { tableNumber: `Table ${verification.tableNumber}` },
+              { tableNumber: String(verification.tableNumber) },
+            ],
+          },
+          include: { branch: true },
+        });
+      } else {
+        const cleanNumber = String(qrToken).toLowerCase().startsWith('table')
+          ? String(qrToken)
+          : `Table ${qrToken}`;
+        table = await prisma.table.findFirst({
+          where: {
+            OR: [
+              { qrToken: qrToken },
+              { tableNumber: cleanNumber },
+              { tableNumber: String(qrToken) },
+            ],
+          },
+          include: { branch: true },
+        });
+      }
     } else if (tableNumber) {
       const cleanNumber = String(tableNumber).toLowerCase().startsWith('table')
         ? String(tableNumber)
         : `Table ${tableNumber}`;
       table = await prisma.table.findFirst({
-        where: { tableNumber: cleanNumber },
+        where: {
+          OR: [
+            { tableNumber: cleanNumber },
+            { tableNumber: String(tableNumber) },
+          ],
+        },
         include: { branch: true },
       });
     }
