@@ -114,7 +114,15 @@ def read_root():
     return {
         "service": "AI POS Inventory Forecasting API",
         "status": "online",
-        "endpoints": ["/predict", "/predict-eta"]
+        "endpoints": ["/predict", "/predict-eta", "/health"]
+    }
+
+@app.get("/health")
+def read_health():
+    return {
+        "status": "healthy",
+        "service": "AI POS Inventory Forecasting API",
+        "model_loaded": eta_model is not None
     }
 
 @app.post("/predict", response_model=ForecastResponse)

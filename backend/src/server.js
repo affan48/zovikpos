@@ -79,7 +79,35 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/eta', etaRoutes);
 
-// Health check endpoint
+// Root and health check endpoints
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    service: 'ZovikPOS Backend API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api', (req, res) => {
+  res.json({
+    status: 'online',
+    service: 'ZovikPOS Backend API',
+    endpoints: [
+      '/api/auth',
+      '/api/sessions',
+      '/api/cart',
+      '/api/tables',
+      '/api/menu',
+      '/api/orders',
+      '/api/payments',
+      '/api/inventory',
+      '/api/admin',
+      '/api/eta',
+    ],
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',

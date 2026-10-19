@@ -8,86 +8,89 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('--- Starting Complete POS Database Seed ---');
 
-  // 0. Clean all tables in correct dependency order
-  console.log('Cleaning existing data...');
-  await prisma.orderStatusHistory.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.emailOTP.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.eTAPrediction.deleteMany();
-  await prisma.demandForecast.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.cartItem.deleteMany();
-  await prisma.cart.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.recipeItem.deleteMany();
-  await prisma.inventoryLog.deleteMany();
-  await prisma.inventoryItem.deleteMany();
-  await prisma.supplier.deleteMany();
-  await prisma.table.deleteMany();
-  await prisma.menuItem.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.branch.deleteMany();
-
-  // 1. Create Default Branch
-  const branch = await prisma.branch.create({
-    data: {
-      name: 'ZovikPOS Main Campus Canteen',
-      address: 'University Campus Plaza, Block A',
-      phone: '+92 300 1234567',
-      isActive: true,
-    },
+  // 1. Create or retrieve Default Branch
+  let branch = await prisma.branch.findFirst({
+    where: { name: 'ZovikPOS Main Campus Canteen' },
   });
-  console.log(`Created Branch: ${branch.name} (ID: ${branch.id})`);
-
-  // 2. Create 20 Physical Tables with signed cryptographic QR tokens
-  console.log('Creating signed physical tables...');
-  for (let i = 1; i <= 20; i++) {
-    const tableNumber = String(i);
-    const qrToken = generateTableToken(tableNumber, branch.id);
-    await prisma.table.create({
+  if (!branch) {
+    branch = await prisma.branch.create({
       data: {
-        branchId: branch.id,
-        tableNumber: `Table ${tableNumber}`,
-        qrToken,
+        name: 'ZovikPOS Main Campus Canteen',
+        address: 'University Campus Plaza, Block A',
+        phone: '+92 300 1234567',
         isActive: true,
       },
     });
+    console.log(`Created Branch: ${branch.name} (ID: ${branch.id})`);
+  } else {
+    console.log(`Branch exists: ${branch.name} (ID: ${branch.id})`);
   }
-  console.log('Created 20 signed tables (Table 1 to Table 20).');
 
-  // 3. Create Default Users (Admin, Cashier/Vendor, Kitchen, Customer)
-  const passwordHash = await bcrypt.hash('Redline742454', 10);
+  // 2. Create 20 Physical Tables with signed cryptographic QR tokens
+  console.log('Ensuring signed physical tables...');
+  for (let i = 1; i <= 20; i++) {
+    const tableNumber = `Table ${i}`;
+    const existingTable = await prisma.table.findUnique({ where: { tableNumber } });
+    if (!existingTable) {
+      const qrToken = generateTableToken(String(i), branch.id);
+      await prisma.table.create({
+        data: {
+          branchId: branch.id,
+          tableNumber,
+          qrToken,
+          isActive: true,
+        },
+      });
+    }
+  }
+  console.log('Verified 20 signed tables (Table 1 to Table 20).');
+
+  // 3. Create Default & Demo Users
+  const realPasswordHash = await bcrypt.hash('Redline742454', 10);
+  const demoPasswordHash = await bcrypt.hash('password123', 10);
+
   const usersData = [
-    { email: 'admin@zovikpos.com', name: 'System Administrator', role: 'ADMIN', branchId: branch.id },
-    { email: 'cashier@zovikpos.com', name: 'Cashier / Vendor', role: 'VENDOR', branchId: branch.id },
-    { email: 'vendor@zovikpos.com', name: 'Cashier / Vendor', role: 'VENDOR', branchId: branch.id },
-    { email: 'kitchen@zovikpos.com', name: 'Kitchen Staff', role: 'KITCHEN', branchId: branch.id },
-    { email: 'customer@zovikpos.com', name: 'Customer Account', role: 'CUSTOMER', branchId: branch.id },
-    { email: 'admin@pos.com', name: 'System Admin', role: 'ADMIN', branchId: branch.id },
-    { email: 'vendor@pos.com', name: 'Main Vendor Cashier', role: 'VENDOR', branchId: branch.id },
-    { email: 'kitchen@pos.com', name: 'Kitchen Chef', role: 'KITCHEN', branchId: branch.id },
-    { email: 'customer@pos.com', name: 'John Doe Customer', role: 'CUSTOMER', branchId: branch.id },
+    // Real staff accounts
+    { email: 'admin@zovikpos.com', name: 'System Administrator', role: 'ADMIN', password: realPasswordHash, isDemo: false },
+    { email: 'cashier@zovikpos.com', name: 'Cashier / Vendor', role: 'VENDOR', password: realPasswordHash, isDemo: false },
+    { email: 'vendor@zovikpos.com', name: 'Cashier / Vendor', role: 'VENDOR', password: realPasswordHash, isDemo: false },
+    { email: 'kitchen@zovikpos.com', name: 'Kitchen Staff', role: 'KITCHEN', password: realPasswordHash, isDemo: false },
+    { email: 'customer@zovikpos.com', name: 'Customer Account', role: 'CUSTOMER', password: realPasswordHash, isDemo: false },
+    // Demo quick login accounts (for Login.jsx)
+    { email: 'admin@pos.com', name: 'System Admin (Demo)', role: 'ADMIN', password: demoPasswordHash, isDemo: false },
+    { email: 'vendor@pos.com', name: 'Main Vendor Cashier (Demo)', role: 'VENDOR', password: demoPasswordHash, isDemo: false },
+    { email: 'kitchen@pos.com', name: 'Kitchen Chef (Demo)', role: 'KITCHEN', password: demoPasswordHash, isDemo: false },
+    { email: 'customer@pos.com', name: 'John Doe Customer', role: 'CUSTOMER', password: demoPasswordHash, isDemo: false },
+    // RoleLogin sandbox demo accounts (for RoleLogin.jsx quick fill)
+    { email: 'demo.admin@testpos.local', name: 'Demo Administrator', role: 'ADMIN', password: demoPasswordHash, isDemo: true },
+    { email: 'demo.cashier@testpos.local', name: 'Demo Cashier', role: 'VENDOR', password: demoPasswordHash, isDemo: true },
+    { email: 'demo.kitchen@testpos.local', name: 'Demo Kitchen Chef', role: 'KITCHEN', password: demoPasswordHash, isDemo: true },
   ];
 
   for (const u of usersData) {
-    const user = await prisma.user.create({
-      data: {
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      update: {
+        name: u.name,
+        role: u.role,
+        isDemo: u.isDemo,
+        isActive: true,
+      },
+      create: {
         email: u.email,
         name: u.name,
-        password: passwordHash,
+        password: u.password,
         role: u.role,
-        branchId: u.branchId,
+        isDemo: u.isDemo,
+        branchId: branch.id,
         isActive: true,
       },
     });
-    console.log(`Created user: ${user.name} (${user.role})`);
+    console.log(`User ready: ${user.email} (${user.role}${user.isDemo ? ' - DEMO' : ''})`);
   }
 
   // 4. Create Suppliers
-  console.log('Creating suppliers...');
+  console.log('Ensuring suppliers...');
   const suppliersData = [
     { name: 'Metro Wholesale Pakistan', contactPerson: 'Ali Ahmed', phone: '0300-1112233', email: 'sales@metro.pk', address: 'Lahore Highway Hub' },
     { name: 'K&N\'s Poultry Supplies', contactPerson: 'Tariq Hassan', phone: '0321-4445566', email: 'orders@kns.pk', address: 'Industrial Area Sector 5' },
@@ -98,7 +101,10 @@ async function main() {
 
   const createdSuppliers = {};
   for (const s of suppliersData) {
-    const sup = await prisma.supplier.create({ data: s });
+    let sup = await prisma.supplier.findFirst({ where: { name: s.name } });
+    if (!sup) {
+      sup = await prisma.supplier.create({ data: s });
+    }
     createdSuppliers[s.name] = sup.id;
   }
 
@@ -119,7 +125,11 @@ async function main() {
   ];
 
   for (const cat of categoriesData) {
-    await prisma.category.create({ data: cat });
+    await prisma.category.upsert({
+      where: { slug: cat.slug },
+      update: { name: cat.name },
+      create: cat,
+    });
   }
 
   // 6. Create Raw Ingredients (InventoryItems)
@@ -193,36 +203,42 @@ async function main() {
 
   const inventoryMap = {};
   for (const rawData of rawIngredientsData) {
-    const inv = await prisma.inventoryItem.create({
-      data: {
-        branchId: branch.id,
-        name: rawData.name,
-        category: rawData.category,
-        unit: rawData.unit,
-        stockLevel: rawData.stockLevel,
-        minThreshold: rawData.minThreshold,
-        maxThreshold: rawData.maxThreshold,
-        costPrice: rawData.costPrice,
-        supplierId: rawData.supplierId,
-      }
+    let inv = await prisma.inventoryItem.findFirst({
+      where: { name: rawData.name, branchId: branch.id },
     });
 
-    await prisma.inventoryLog.create({
-      data: {
-        inventoryItemId: inv.id,
-        quantityBefore: 0,
-        quantityAfter: rawData.stockLevel,
-        changeQty: rawData.stockLevel,
-        type: 'RESTOCK',
-        reason: 'Initial raw ingredient inventory provisioning',
-        cost: rawData.costPrice * rawData.stockLevel,
-        supplierId: rawData.supplierId,
-      }
-    });
+    if (!inv) {
+      inv = await prisma.inventoryItem.create({
+        data: {
+          branchId: branch.id,
+          name: rawData.name,
+          category: rawData.category,
+          unit: rawData.unit,
+          stockLevel: rawData.stockLevel,
+          minThreshold: rawData.minThreshold,
+          maxThreshold: rawData.maxThreshold,
+          costPrice: rawData.costPrice,
+          supplierId: rawData.supplierId,
+        },
+      });
+
+      await prisma.inventoryLog.create({
+        data: {
+          inventoryItemId: inv.id,
+          quantityBefore: 0,
+          quantityAfter: rawData.stockLevel,
+          changeQty: rawData.stockLevel,
+          type: 'RESTOCK',
+          reason: 'Initial raw ingredient inventory provisioning',
+          cost: rawData.costPrice * rawData.stockLevel,
+          supplierId: rawData.supplierId,
+        },
+      });
+    }
 
     inventoryMap[rawData.name] = inv;
   }
-  console.log(`Created ${Object.keys(inventoryMap).length} raw ingredient inventory items.`);
+  console.log(`Verified ${Object.keys(inventoryMap).length} raw ingredient inventory items.`);
 
   // 7. Create Menu Items (Finished Canteen Products)
   console.log('Creating menu items...');
@@ -259,23 +275,30 @@ async function main() {
 
   const menuMap = {};
   for (const itemData of menuItemsData) {
-    const menuItem = await prisma.menuItem.create({
-      data: {
-        branchId: branch.id,
-        name: itemData.name,
-        description: itemData.description,
-        price: itemData.price,
-        type: 'food',
-        category: itemData.category,
-        stock: itemData.stock,
-        prepTime: itemData.prepTime,
-        imageUrl: itemData.imageUrl,
-        isActive: true,
-      },
+    let menuItem = await prisma.menuItem.findFirst({
+      where: { name: itemData.name, branchId: branch.id },
     });
+
+    if (!menuItem) {
+      menuItem = await prisma.menuItem.create({
+        data: {
+          branchId: branch.id,
+          name: itemData.name,
+          description: itemData.description,
+          price: itemData.price,
+          type: 'food',
+          category: itemData.category,
+          stock: itemData.stock,
+          prepTime: itemData.prepTime,
+          imageUrl: itemData.imageUrl,
+          isActive: true,
+        },
+      });
+    }
+
     menuMap[itemData.name] = menuItem;
   }
-  console.log(`Created ${Object.keys(menuMap).length} menu items.`);
+  console.log(`Verified ${Object.keys(menuMap).length} menu items.`);
 
   // 8. Create RecipeItem mappings (MenuItem -> RecipeItem -> InventoryItem)
   console.log('Mapping recipes for menu items...');
@@ -556,18 +579,29 @@ async function main() {
       const invItem = inventoryMap[ing.invName];
       if (!invItem) continue;
 
-      await prisma.recipeItem.create({
-        data: {
-          menuItemId: menuItem.id,
-          inventoryItemId: invItem.id,
-          quantity: ing.qty,
-          unit: ing.unit,
+      const existing = await prisma.recipeItem.findUnique({
+        where: {
+          menuItemId_inventoryItemId: {
+            menuItemId: menuItem.id,
+            inventoryItemId: invItem.id,
+          },
         },
       });
-      totalRecipesCreated++;
+
+      if (!existing) {
+        await prisma.recipeItem.create({
+          data: {
+            menuItemId: menuItem.id,
+            inventoryItemId: invItem.id,
+            quantity: ing.qty,
+            unit: ing.unit,
+          },
+        });
+        totalRecipesCreated++;
+      }
     }
   }
-  console.log(`Created ${totalRecipesCreated} recipe ingredient mappings across ${recipesData.length} menu items.`);
+  console.log(`Verified recipe ingredient mappings across ${recipesData.length} menu items.`);
 
   console.log(`✅ Seeding completed successfully. Seeded ${menuItemsData.length} menu items and ${Object.keys(inventoryMap).length} raw ingredient items.`);
 }

@@ -1,14 +1,24 @@
 import axios from 'axios';
 
+export const getBackendBase = () => {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL.replace(/\/$/, '');
+  }
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    return `http://${host}:5001`;
+  }
+  return 'http://localhost:5001';
+};
+
 const getApiBase = () => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  if (typeof window !== 'undefined' && window.location) {
-    const host = window.location.hostname;
-    return `http://${host}:5001/api`;
-  }
-  return 'http://localhost:5001/api';
+  return `${getBackendBase()}/api`;
 };
 
 const api = axios.create({

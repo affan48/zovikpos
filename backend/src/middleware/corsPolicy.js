@@ -11,6 +11,13 @@ const addConfiguredOrigins = (value) => {
   });
 };
 
+const defaultAllowedOrigins = [
+  'https://zovikpos.store',
+  'https://www.zovikpos.store',
+  'https://zovikpos.vercel.app',
+];
+
+defaultAllowedOrigins.forEach((origin) => configuredOrigins.add(origin));
 addConfiguredOrigins(process.env.FRONTEND_URL);
 addConfiguredOrigins(process.env.CORS_ORIGINS);
 
@@ -26,16 +33,26 @@ const corsOrigin = (origin, callback) => {
   if (!origin) return callback(null, true);
   if (configuredOrigins.has(origin)) return callback(null, true);
 
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const parsed = new URL(origin);
-      const isHttpOrigin = parsed.protocol === 'http:' || parsed.protocol === 'https:';
-      const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
-      const isLocalNetwork = isPrivateIpv4(parsed.hostname) || parsed.hostname.endsWith('.local');
-      if (isHttpOrigin && (isLocalHost || isLocalNetwork)) return callback(null, true);
-    } catch {
-      // Invalid Origin values are denied below.
+  try {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname;
+    // Allow production domains and preview Vercel branches
+    if (
+      hostname === 'zovikpos.store' ||
+      hostname.endsWith('.zovikpos.store') ||
+      hostname.endsWith('.vercel.app')
+    ) {
+      return callback(null, true);
     }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const isHttpOrigin = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+      const isLocalNetwork = isPrivateIpv4(hostname) || hostname.endsWith('.local');
+      if (isHttpOrigin && (isLocalHost || isLocalNetwork)) return callback(null, true);
+    }
+  } catch {
+    // Invalid Origin values are denied below.
   }
 
   return callback(null, false);

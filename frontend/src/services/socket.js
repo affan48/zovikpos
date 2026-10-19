@@ -27,7 +27,10 @@ const getTokenForUser = (user) => {
 
 const getSocketUrl = () => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SOCKET_URL) {
-    return import.meta.env.VITE_SOCKET_URL;
+    return import.meta.env.VITE_SOCKET_URL.replace(/\/$/, '');
+  }
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '');
   }
   if (typeof window !== 'undefined' && window.location) {
     return `http://${window.location.hostname}:5001`;
